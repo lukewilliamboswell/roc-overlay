@@ -109,28 +109,39 @@
     #   metadata from sources.json
     # - Compiles and runs a hello program
     # - Checks its exact stdout
+    # - Repeats the smoke test through a renamed launcher, which
+    #   must not provide a bare roc
     checks =
       lib.mapAttrs (
         system: pkgs: let
           roc = self.packages.${system}.nightly;
+          rocStable = roc.withName "roc-stable";
+
+          mkSmoke = name: package: command:
+            pkgs.runCommand name {nativeBuildInputs = [package];} ''
+              export HOME="$TMPDIR/home"
+              mkdir -p "$HOME" "$TMPDIR/test"
+
+              test "$(${command} version)" = "Roc compiler version ${package.compilerVersion}"
+
+              cat >"$TMPDIR/test/main.roc" <<'EOF'
+              main! = |_args| {
+                  echo!("Hello from Roc!")
+                  Ok({})
+              }
+              EOF
+
+              test "$(cd "$TMPDIR/test" && ${command} main.roc)" = "Hello from Roc!"
+              touch "$out"
+            '';
         in {
           nightly = roc;
-          smoke = pkgs.runCommand "roc-nightly-smoke" {nativeBuildInputs = [roc];} ''
-            export HOME="$TMPDIR/home"
-            mkdir -p "$HOME" "$TMPDIR/test"
-
-            test "$(roc version)" = "Roc compiler version ${roc.compilerVersion}"
-
-            cat >"$TMPDIR/test/main.roc" <<'EOF'
-            main! = |_args| {
-                echo!("Hello from Roc!")
-                Ok({})
-            }
-            EOF
-
-            test "$(cd "$TMPDIR/test" && roc main.roc)" = "Hello from Roc!"
+          smoke = mkSmoke "roc-nightly-smoke" roc "roc";
+          launcher = pkgs.runCommand "roc-launcher-contents" {} ''
+            test "$(ls ${rocStable}/bin)" = "roc-stable"
             touch "$out"
           '';
+          launcher-smoke = mkSmoke "roc-launcher-smoke" rocStable "roc-stable";
         }
       )
       pkgsFor;
