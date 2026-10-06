@@ -128,7 +128,13 @@ Intel macOS packages use the last compatible Nixpkgs Darwin release branch (Nixp
 `default` and `nightly` point to the newest release in `sources.json`. Every recorded release also remains available under its complete release tag.
 
 
-On Linux, `roc` is wrapped with Nix's C toolchain and core utilities so it can locate libc in Nix-managed environments, especially NixOS. Ordinary platform apps and `roc version` alone do not expose that requirement. On macOS, the package installs Roc's bundled minimal Darwin sysroot next to the executable.
+Each package is the bare compiler binary and depends on nothing else: it links musl and macOS targets by itself. A program built for a glibc target links the system libc, which Roc finds through a C toolchain on `PATH`; a Nix-managed environment such as NixOS has none by default. For that, use `withCc`, which is the same compiler with Nix's C toolchain and core utilities on its `PATH`:
+
+```nix
+packages = [pkgs.rocpkgs.nightly.withCc];
+```
+
+On macOS, `withCc` is the package itself, and the package installs Roc's bundled minimal Darwin sysroot next to the executable.
 
 
 ## Updating `sources.json`

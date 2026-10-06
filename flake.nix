@@ -142,6 +142,23 @@
             touch "$out"
           '';
           launcher-smoke = mkSmoke "roc-launcher-smoke" rocStable "roc-stable";
+          # The bare compiler needs nothing else: with an empty PATH it
+          # still compiles and runs a program.
+          bare-smoke = pkgs.runCommand "roc-bare-smoke" {} ''
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME" "$TMPDIR/test"
+            cat >"$TMPDIR/test/main.roc" <<'EOF'
+            main! = |_args| {
+                echo!("Hello from Roc!")
+                Ok({})
+            }
+            EOF
+            cd "$TMPDIR/test"
+            test "$(PATH= ${roc}/bin/roc main.roc)" = "Hello from Roc!"
+            test ! -e ${roc}/nix-support/propagated-build-inputs
+            touch "$out"
+          '';
+          with-cc-smoke = mkSmoke "roc-with-cc-smoke" roc.withCc "roc";
         }
       )
       pkgsFor;
