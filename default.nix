@@ -37,6 +37,27 @@
           };
       });
 
+  # The compiler with Nix's C toolchain and core utilities on its PATH. A
+  # roc built for glibc targets looks there for the system libc, which a
+  # Nix-managed environment such as NixOS has nowhere else.
+  mkWithCc = roc:
+    if !pkgs.stdenv.hostPlatform.isLinux
+    then roc
+    else
+      pkgs.runCommand "${roc.pname}-${roc.version}-with-cc" {
+        nativeBuildInputs = [pkgs.makeWrapper];
+        passthru = {
+          inherit roc;
+          inherit (roc) compilerCommit compilerVersion tag;
+        };
+        meta =
+          roc.meta
+          // {description = "${roc.meta.description} (${roc.tag}) with a C toolchain on PATH";};
+      } ''
+        makeWrapper ${roc}/bin/roc "$out/bin/roc" \
+          --prefix PATH : ${lib.makeBinPath [pkgs.coreutils pkgs.stdenv.cc]}
+      '';
+
   # Grab a particular nightly release from sources
   # and build a roc derivation for it.
 
@@ -90,16 +111,6 @@
       dontBuild = true;
       dontStrip = true;
 
-      # A conditional for Linux:
-      #   - If the host platform which will be running roc
-      #     is Linux, make the wrapProgram available during
-      #     package construction.
-      #
-      # Darwin uses different linking logic.
-      nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-        pkgs.makeWrapper
-      ];
-
       # preInstall/postInstall allow callers to
       # register shell code before or after installation.
       # If the caller doesn't register a runHook, they are noops.
@@ -125,23 +136,6 @@
         runHook postInstall
       '';
 
-      # On Linux, wrap roc (which lives at PATH) in a
-      # closure which contains coreutils and cc,
-      # tools it needs.
-      #
-      # Darwin uses different linking strategy.
-      postFixup = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
-        # Adds the location of the coreutils and cc to roc's PATH
-        # so it knows where to find them.
-        wrapProgram "$out/bin/roc" \
-          --prefix PATH : ${
-          lib.makeBinPath [
-            pkgs.coreutils
-            pkgs.stdenv.cc
-          ]
-        }
-      '';
-
       # Attach additional attributes to the resulting derivation
       # without changing how roc builds.
       #
@@ -153,6 +147,10 @@
         inherit source;
         # e.g. rocpkgs."nightly-2026-09-10-a670e34".withName "roc-stable"
         withName = mkLauncher finalAttrs.finalPackage;
+        # The package is the bare static compiler: it links musl and macOS
+        # targets by itself. withCc adds Nix's C toolchain and core
+        # utilities to its PATH, for targets that link the system libc.
+        withCc = mkWithCc finalAttrs.finalPackage;
       };
 
       meta = {
