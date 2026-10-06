@@ -106,6 +106,25 @@ On CI this pairs with [`roc-lang/setup-roc`](https://github.com/roc-lang/setup-r
 
 `nix develop` keeps the surrounding `PATH`, so the `roc` installed by setup-roc stays visible inside it.
 
+### The stable compiler for repository tooling
+
+`sources.json` records one release as `stable`. It is still a nightly binary, promoted by review so that repository automation has a compiler that does not move every day. Two packages expose it:
+
+| Package | Contents |
+| --- | --- |
+| `stable` | The promoted release, installing `bin/roc` |
+| `roc-stable` | Only `bin/roc-stable`, equivalent to `stable.withName "roc-stable"` |
+
+```nix
+devShells.${system}.default = pkgs.mkShell {
+  packages = [pkgs.rocpkgs.roc-stable];
+};
+```
+
+A consumer that names `roc-stable` instead of a release tag gets whichever release was stable at its locked overlay commit, and moves to a newly promoted release by updating that lock. The promoted compiler is not an official Roc stable release, and `default` remains the latest nightly.
+
+To promote a release, open a pull request that changes only `stable` in `sources.json` to a tag already recorded under `releases`. Promote a release only after the automation scripts that depend on `roc-stable` pass on it. `update.sh` never changes `stable` and never prunes the release it names.
+
 ### Updating
 
 The consumer's `flake.lock` pins the selected overlay commit, so Roc updates are explicit:

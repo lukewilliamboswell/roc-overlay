@@ -180,8 +180,20 @@
   );
 
   nightly = releasePackages.${sources.latest};
+
+  # The release recorded as .stable in sources.json: a nightly promoted by
+  # review for repository tooling that should not move with every nightly.
+  # It is absent on a system the promoted release has no binary for.
+  stablePackages = lib.optionalAttrs (releasePackages ? ${sources.stable}) (let
+    stable = releasePackages.${sources.stable};
+  in {
+    inherit stable;
+    # Only bin/roc-stable, so it can share PATH with another roc.
+    roc-stable = stable.withName "roc-stable";
+  });
 in
   releasePackages
+  // stablePackages
   // {
     inherit nightly;
     # default and nightly are the same currently because the new

@@ -111,11 +111,14 @@
     # - Checks its exact stdout
     # - Repeats the smoke test through a renamed launcher, which
     #   must not provide a bare roc
+    # - Checks that stable and roc-stable are the release sources.json
+    #   records as .stable, and smoke tests roc-stable
     checks =
       lib.mapAttrs (
         system: pkgs: let
           roc = self.packages.${system}.nightly;
           rocStable = roc.withName "roc-stable";
+          stableTag = (builtins.fromJSON (builtins.readFile ./sources.json)).stable;
 
           mkSmoke = name: package: command:
             pkgs.runCommand name {nativeBuildInputs = [package];} ''
@@ -142,6 +145,13 @@
             touch "$out"
           '';
           launcher-smoke = mkSmoke "roc-launcher-smoke" rocStable "roc-stable";
+          stable-tag = pkgs.runCommand "roc-stable-tag" {} ''
+            test "${self.packages.${system}.stable.tag}" = "${stableTag}"
+            test "${self.packages.${system}.roc-stable.tag}" = "${stableTag}"
+            test "$(ls ${self.packages.${system}.roc-stable}/bin)" = "roc-stable"
+            touch "$out"
+          '';
+          stable-smoke = mkSmoke "roc-stable-smoke" self.packages.${system}.roc-stable "roc-stable";
         }
       )
       pkgsFor;

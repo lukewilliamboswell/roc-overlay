@@ -229,7 +229,7 @@ jq -n \
 #
 # Pruning is therefore opt-in. Set ROC_OVERLAY_KEEP_RECENT=<n> to keep only the
 # newest n releases, plus the newest release of every calendar month, plus
-# whatever .latest points at. Note that dropping an entry does not break a
+# whatever .latest and .stable point at. Note that dropping an entry does not break a
 # consumer who pinned it: their flake.lock pins a commit of *this* overlay, and
 # that commit still records the release. Only
 # `nix shell 'github:roc-lang/roc-overlay#<pruned-tag>'` against the default
@@ -268,7 +268,7 @@ jq -S \
           ) as $keep
         | .releases |= with_entries(
             . as $e
-            | select($e.key == $root.latest or ($keep | index($e.key)) != null)
+            | select($e.key == $root.latest or $e.key == $root.stable or ($keep | index($e.key)) != null)
           )
       end
   ' \
