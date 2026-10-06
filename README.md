@@ -80,6 +80,32 @@ Select a historical package with `roc-overlay.packages.${system}."<release-tag>"
 }
 ```
 
+### A pinned Roc alongside another `roc`
+
+Every package installs `bin/roc`, so two of them cannot share a `PATH`. To keep a pinned compiler for repository tooling next to the compiler under test, give the pinned one another command name with `withName`. The result contains only that command:
+
+```nix
+devShells.${system}.default = pkgs.mkShell {
+  packages = [
+    (pkgs.rocpkgs."nightly-2026-09-10-a670e34".withName "roc-stable")
+  ];
+};
+```
+
+Scripts can then start with `#!/usr/bin/env roc-stable`. `withName` is available on every package, including `roc-overlay.packages.${system}."<release-tag>"`, and several pinned versions can coexist under different names.
+
+On CI this pairs with [`roc-lang/setup-roc`](https://github.com/roc-lang/setup-roc) providing the floating nightly as `roc`:
+
+```yaml
+- uses: roc-lang/setup-roc@<commit-sha>
+  with:
+    version: nightly-new-compiler
+# `roc` is the latest nightly; `roc-stable` is the pinned compiler from the dev shell.
+- run: nix develop -c roc-stable scripts/all_tests.roc
+```
+
+`nix develop` keeps the surrounding `PATH`, so the `roc` installed by setup-roc stays visible inside it.
+
 ### Updating
 
 The consumer's `flake.lock` pins the selected overlay commit, so Roc updates are explicit:
@@ -87,6 +113,8 @@ The consumer's `flake.lock` pins the selected overlay commit, so Roc updates are
 ```sh
 nix flake update roc-overlay
 ```
+
+This applies to `nightly` too: as a flake input it is the newest release recorded at the locked commit, not the latest published nightly. A release tag can be selected once the locked commit records it in `sources.json`.
 
 ## Supported systems
 
@@ -112,6 +140,8 @@ On Linux, `roc` is wrapped with Nix's C toolchain and core utilities so it can l
 ```
 
 The optional argument selects a specific release; otherwise the script uses GitHub's latest-release API. It validates the immutable release, all four expected assets, tag/commit consistency, URLs, and API-provided SHA-256 digests.
+
+Releases are kept indefinitely by default. Setting `ROC_OVERLAY_KEEP_RECENT` prunes old ones, which breaks consumers pinned to those tags.
 
 Maintainer checks:
 

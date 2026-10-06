@@ -9,6 +9,34 @@
   inherit (pkgs) lib;
   sources = builtins.fromJSON (builtins.readFile ./sources.json);
 
+  # Expose a roc package under another command name, e.g. "roc-stable".
+  # The result contains only bin/<name>, so a pinned compiler can share
+  # PATH with another roc.
+  #
+  # This is an exec wrapper rather than a symlink because roc searches
+  # for its darwin sysroot next to the real executable.
+  mkLauncher = roc: name:
+    if name == "roc"
+    then throw "roc-overlay: withName \"roc\" is the package itself; use it directly"
+    else
+      (pkgs.writeShellScriptBin name ''
+        exec ${roc}/bin/roc "$@"
+      '').overrideAttrs (old: {
+        passthru =
+          (old.passthru or {})
+          // {
+            inherit roc;
+            inherit (roc) compilerCommit compilerVersion tag;
+          };
+
+        meta =
+          old.meta
+          // {
+            inherit (roc.meta) homepage changelog license platforms;
+            description = "${roc.meta.description} (${roc.tag}) as ${name}";
+          };
+      });
+
   # Grab a particular nightly release from sources
   # and build a roc derivation for it.
 
@@ -37,7 +65,7 @@
     #         },
     source = release.systems.${system};
   in
-    pkgs.stdenv.mkDerivation {
+    pkgs.stdenv.mkDerivation (finalAttrs: {
       pname = "roc";
       version = release.tag;
 
@@ -123,6 +151,8 @@
       passthru = {
         inherit (release) compilerCommit compilerVersion tag;
         inherit source;
+        # e.g. rocpkgs."nightly-2026-09-10-a670e34".withName "roc-stable"
+        withName = mkLauncher finalAttrs.finalPackage;
       };
 
       meta = {
@@ -134,7 +164,7 @@
         platforms = [system];
         sourceProvenance = [lib.sourceTypes.binaryNativeCode];
       };
-    };
+    });
 
   # 1. Removes releases unavailable for system via filterAttrs
   # 2. Converts every remaining release into a Roc package via mkRoc
